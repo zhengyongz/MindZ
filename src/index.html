@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MindZ Mind Map</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- Toolbar -->
+  <div id="toolbar">
+    <div class="toolbar-group"><div class="toolbar-brand">MindZ</div></div>
+
+    <div class="toolbar-group">
+      <button class="tb-btn" id="btn-new" title="New (Ctrl+N)"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" fill="none" stroke="currentColor" stroke-width="2"/><polyline points="14 2 14 8 20 8" fill="none" stroke="currentColor" stroke-width="2"/></svg><span id="btn-new-text">New</span></button>
+      <button class="tb-btn" id="btn-open" title="Open (Ctrl+O)"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" fill="none" stroke="currentColor" stroke-width="2"/></svg><span id="btn-open-text">Open</span></button>
+      <button class="tb-btn" id="btn-save" title="Save (Ctrl+S)"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" fill="none" stroke="currentColor" stroke-width="2"/><polyline points="17 21 17 13 7 13 7 21" fill="none" stroke="currentColor" stroke-width="2"/><polyline points="7 3 7 8 15 8" fill="none" stroke="currentColor" stroke-width="2"/></svg><span id="btn-save-text">Save</span></button>
+    </div>
+    <div class="toolbar-sep"></div>
+
+    <div class="toolbar-group">
+      <button class="tb-btn" id="btn-undo" title="Undo (Ctrl+Z)"><svg viewBox="0 0 24 24" width="18" height="18"><polyline points="1 4 1 10 7 10" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10" fill="none" stroke="currentColor" stroke-width="2"/></svg></button>
+      <button class="tb-btn" id="btn-redo" title="Redo (Ctrl+Y)"><svg viewBox="0 0 24 24" width="18" height="18"><polyline points="23 4 23 10 17 10" fill="none" stroke="currentColor" stroke-width="2"/><path d="M20.49 15a9 9 0 11-2.13-9.36L23 10" fill="none" stroke="currentColor" stroke-width="2"/></svg></button>
+    </div>
+    <div class="toolbar-sep"></div>
+
+    <div class="toolbar-group">
+      <button class="tb-btn" id="btn-add-child" title="Child Node (Tab)"><svg viewBox="0 0 24 24" width="18" height="18"><line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" stroke-width="2"/><line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="2"/></svg><span id="btn-child-text">Child</span></button>
+      <button class="tb-btn" id="btn-add-sibling" title="Sibling (Enter)"><svg viewBox="0 0 24 24" width="18" height="18"><line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" stroke-width="2"/><line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="2"/></svg><span id="btn-sibling-text">Sibling</span></button>
+      <button class="tb-btn" id="btn-delete" title="Delete (Del)"><svg viewBox="0 0 24 24" width="18" height="18"><polyline points="3 6 5 6 21 6" fill="none" stroke="currentColor" stroke-width="2"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" fill="none" stroke="currentColor" stroke-width="2"/></svg><span id="btn-delete-text">Del</span></button>
+    </div>
+    <div class="toolbar-sep"></div>
+
+    <!-- Relation / Annotation / Boundary / Summary -->
+    <div class="toolbar-group">
+      <button class="tb-btn tb-accent" id="btn-relation" title="Relation Line">
+        <svg viewBox="0 0 24 24" width="18" height="18"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" fill="none" stroke="currentColor" stroke-width="2"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+        <span id="btn-relation-text">Relation</span>
+      </button>
+      <button class="tb-btn" id="btn-annotation" title="Annotation">
+        <svg viewBox="0 0 24 24" width="18" height="18"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" fill="none" stroke="currentColor" stroke-width="2"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+        <span id="btn-annotation-text">Annotation</span>
+      </button>
+      <button class="tb-btn" id="btn-boundary" title="Boundary">
+        <svg viewBox="0 0 24 24" width="18" height="18"><rect x="3" y="3" width="18" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="4 2"/></svg>
+        <span id="btn-boundary-text">Boundary</span>
+      </button>
+      <button class="tb-btn" id="btn-summary" title="Summary">
+        <svg viewBox="0 0 24 24" width="18" height="18"><path d="M4 17l6-6-6-6M20 7l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span id="btn-summary-text">Summary</span>
+      </button>
+    </div>
+    <div class="toolbar-sep"></div>
+
+    <div class="toolbar-group">
+      <div class="dropdown" id="layout-dropdown">
+        <button class="tb-btn dropdown-trigger" id="btn-layout" title="Layout">
+          <svg viewBox="0 0 24 24" width="18" height="18"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><line x1="12" y1="3" x2="12" y2="6" stroke="currentColor" stroke-width="2"/><line x1="12" y1="18" x2="12" y2="21" stroke="currentColor" stroke-width="2"/><line x1="3" y1="12" x2="6" y2="12" stroke="currentColor" stroke-width="2"/><line x1="18" y1="12" x2="21" y2="12" stroke="currentColor" stroke-width="2"/></svg>
+          <span id="btn-layout-text">Layout</span>
+          <svg viewBox="0 0 24 24" width="12" height="12" class="arrow"><polyline points="6 9 12 15 18 9" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+        </button>
+        <div class="dropdown-menu">
+          <button data-layout="mindmap"><span i18n="layout_mindmap">Mind Map</span></button>
+          <button data-layout="tree-right"><span i18n="layout_tree_right">Tree Right</span></button>
+          <button data-layout="tree-down"><span i18n="layout_tree_down">Tree Down</span></button>
+          <button data-layout="fishbone"><span i18n="layout_fishbone">Fishbone</span></button>
+          <button data-layout="org"><span i18n="layout_org">Org Chart</span></button>
+        </div>
+      </div>
+      <div class="dropdown" id="theme-dropdown">
+        <button class="tb-btn dropdown-trigger" id="btn-theme" title="Theme">
+          <svg viewBox="0 0 24 24" width="18" height="18"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2a10 10 0 010 20z" fill="currentColor" opacity="0.5"/></svg>
+          <span id="btn-theme-text">Theme</span>
+          <svg viewBox="0 0 24 24" width="12" height="12" class="arrow"><polyline points="6 9 12 15 18 9" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+        </button>
+        <div class="dropdown-menu">
+          <button data-theme="classic-blue"><span i18n="theme_classic_blue">Classic Blue</span></button>
+          <button data-theme="dark-purple"><span i18n="theme_dark_purple">Dark Purple</span></button>
+          <button data-theme="fresh-green"><span i18n="theme_fresh_green">Fresh Green</span></button>
+          <button data-theme="vibrant-orange"><span i18n="theme_vibrant_orange">Vibrant Orange</span></button>
+          <button data-theme="minimal"><span i18n="theme_minimal">Minimal</span></button>
+          <button data-theme="china-red"><span i18n="theme_china_red">China Red</span></button>
+        </div>
+      </div>
+      <div class="dropdown" id="template-dropdown">
+        <button class="tb-btn dropdown-trigger" id="btn-template" title="Template">
+          <svg viewBox="0 0 24 24" width="18" height="18"><rect x="3" y="3" width="18" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><line x1="3" y1="9" x2="21" y2="9" stroke="currentColor" stroke-width="2"/><line x1="9" y1="9" x2="9" y2="21" stroke="currentColor" stroke-width="2"/></svg>
+          <span id="btn-template-text">Template</span>
+          <svg viewBox="0 0 24 24" width="12" height="12" class="arrow"><polyline points="6 9 12 15 18 9" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+        </button>
+        <div class="dropdown-menu">
+          <button data-template="weekly-plan"><span i18n="tpl_weekly">Weekly Plan</span></button>
+          <button data-template="project"><span i18n="tpl_project">Project Mgmt</span></button>
+          <button data-template="reading-notes"><span i18n="tpl_reading">Reading Notes</span></button>
+          <button data-template="swot"><span i18n="tpl_swot">SWOT Analysis</span></button>
+          <button data-template="brainstorm"><span i18n="tpl_brainstorm">Brainstorm</span></button>
+        </div>
+      </div>
+    </div>
+    <div class="toolbar-spacer"></div>
+
+    <!-- Zoom -->
+    <div class="toolbar-group">
+      <button class="tb-btn" id="btn-zoom-in" title="Zoom In (Ctrl+=)"><svg viewBox="0 0 24 24" width="18" height="18"><circle cx="11" cy="11" r="8" fill="none" stroke="currentColor" stroke-width="2"/><line x1="21" y1="21" x2="16.65" y2="16.65" stroke="currentColor" stroke-width="2"/><line x1="11" y1="8" x2="11" y2="14" stroke="currentColor" stroke-width="2"/><line x1="8" y1="11" x2="14" y2="11" stroke="currentColor" stroke-width="2"/></svg></button>
+      <span class="zoom-label" id="zoom-label">100%</span>
+      <button class="tb-btn" id="btn-zoom-out" title="Zoom Out (Ctrl+-)"><svg viewBox="0 0 24 24" width="18" height="18"><circle cx="11" cy="11" r="8" fill="none" stroke="currentColor" stroke-width="2"/><line x1="21" y1="21" x2="16.65" y2="16.65" stroke="currentColor" stroke-width="2"/><line x1="8" y1="11" x2="14" y2="11" stroke="currentColor" stroke-width="2"/></svg></button>
+      <button class="tb-btn" id="btn-fit" title="Fit Canvas (Ctrl+1)"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3" fill="none" stroke="currentColor" stroke-width="2"/></svg></button>
+    </div>
+    <div class="toolbar-sep"></div>
+
+    <!-- Export -->
+    <div class="toolbar-group">
+      <div class="dropdown" id="export-dropdown">
+        <button class="tb-btn dropdown-trigger" id="btn-export" title="Export">
+          <svg viewBox="0 0 24 24" width="18" height="18"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" fill="none" stroke="currentColor" stroke-width="2"/><polyline points="7 10 12 15 17 10" fill="none" stroke="currentColor" stroke-width="2"/><line x1="12" y1="15" x2="12" y2="3" stroke="currentColor" stroke-width="2"/></svg>
+          <span id="btn-export-text">Export</span>
+          <svg viewBox="0 0 24 24" width="12" height="12" class="arrow"><polyline points="6 9 12 15 18 9" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+        </button>
+        <div class="dropdown-menu">
+          <button data-export="png"><span i18n="exp_png">PNG Image</span></button>
+          <button data-export="svg"><span i18n="exp_svg">SVG Vector</span></button>
+          <button data-export="pdf"><span i18n="exp_pdf">PDF Document</span></button>
+          <button data-export="json"><span i18n="exp_json">JSON Data</span></button>
+          <button data-export="mm"><span i18n="exp_mm">FreeMind File</span></button>
+        </div>
+      </div>
+      <button class="tb-btn" id="btn-outline" title="Outline (Ctrl+Shift+O)"><svg viewBox="0 0 24 24" width="18" height="18"><line x1="8" y1="6" x2="21" y2="6" stroke="currentColor" stroke-width="2"/><line x1="8" y1="12" x2="21" y2="12" stroke="currentColor" stroke-width="2"/><line x1="8" y1="18" x2="21" y2="18" stroke="currentColor" stroke-width="2"/><line x1="3" y1="6" x2="3.01" y2="6" stroke="currentColor" stroke-width="2"/><line x1="3" y1="12" x2="3.01" y2="12" stroke="currentColor" stroke-width="2"/><line x1="3" y1="18" x2="3.01" y2="18" stroke="currentColor" stroke-width="2"/></svg><span id="btn-outline-text">Outline</span></button>
+    </div>
+  </div>
+
+  <!-- Tab Bar -->
+  <div id="tab-bar">
+    <div class="tab-list" id="tab-list">
+      <!-- Tabs rendered dynamically -->
+    </div>
+    <button class="tab-new-btn" id="btn-tab-new" title="New Tab">+</button>
+  </div>
+
+  <!-- Main Content -->
+  <div id="main-content">
+    <div id="canvas-container">
+      <svg id="mindmap-svg" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <filter id="shadow" x="-10%" y="-10%" width="130%" height="130%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="rgba(0,0,0,0.15)"/></filter>
+          <filter id="shadow-lg" x="-15%" y="-15%" width="140%" height="140%"><feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="rgba(0,0,0,0.2)"/></filter>
+        </defs>
+        <g id="svg-viewport">
+          <g id="boundaries-layer"></g>
+          <g id="relationships-layer"></g>
+          <g id="connections-layer"></g>
+          <g id="nodes-layer"></g>
+          <g id="annotations-layer"></g>
+          <g id="summaries-layer"></g>
+        </g>
+      </svg>
+      <div id="node-editor" class="hidden"><textarea id="node-editor-input" rows="1"></textarea></div>
+      <div id="minimap"><canvas id="minimap-canvas"></canvas></div>
+    </div>
+
+    <!-- Side Panel -->
+    <div id="side-panel">
+      <div class="panel-tabs">
+        <button class="panel-tab active" data-panel="outline"><span i18n="tab_outline">Outline</span></button>
+        <button class="panel-tab" data-panel="style"><span i18n="tab_style">Style</span></button>
+        <button class="panel-tab" data-panel="note"><span i18n="tab_note">Note</span></button>
+        <button class="panel-tab" data-panel="ai-chat" id="tab-ai-chat"><span i18n="tab_ai_chat">AI</span></button>
+      </div>
+      <div class="panel-content" id="panel-outline"><div id="outline-tree"></div></div>
+      <div class="panel-content hidden" id="panel-style">
+        <div class="style-section"><label i18n="lbl_shape">Shape</label><div class="shape-options" id="node-shape-options">
+          <button class="shape-btn active" data-shape="rounded-rect"><svg viewBox="0 0 30 20" width="30" height="20"><rect x="1" y="1" width="28" height="18" rx="4" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button>
+          <button class="shape-btn" data-shape="rect"><svg viewBox="0 0 30 20" width="30" height="20"><rect x="1" y="1" width="28" height="18" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button>
+          <button class="shape-btn" data-shape="ellipse"><svg viewBox="0 0 30 20" width="30" height="20"><ellipse cx="15" cy="10" rx="14" ry="9" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button>
+          <button class="shape-btn" data-shape="diamond"><svg viewBox="0 0 30 20" width="30" height="20"><polygon points="15,1 29,10 15,19 1,10" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button>
+          <button class="shape-btn" data-shape="underline"><svg viewBox="0 0 30 20" width="30" height="20"><line x1="1" y1="19" x2="29" y2="19" stroke="currentColor" stroke-width="2"/></svg></button>
+        </div></div>
+        <div class="style-section"><label i18n="lbl_color">Color</label><div class="color-options" id="node-color-options">
+          <button class="color-btn" data-color="#5b7bd5" style="background:#5b7bd5"></button><button class="color-btn" data-color="#e74c3c" style="background:#e74c3c"></button><button class="color-btn" data-color="#2ecc71" style="background:#2ecc71"></button><button class="color-btn" data-color="#f39c12" style="background:#f39c12"></button><button class="color-btn" data-color="#9b59b6" style="background:#9b59b6"></button><button class="color-btn" data-color="#1abc9c" style="background:#1abc9c"></button><button class="color-btn" data-color="#34495e" style="background:#34495e"></button><button class="color-btn" data-color="#e91e63" style="background:#e91e63"></button>
+        </div></div>
+        <div class="style-section"><label i18n="lbl_font_size">Font Size</label><div class="font-size-options">
+          <button class="size-btn" data-size="12">12</button><button class="size-btn active" data-size="14">14</button><button class="size-btn" data-size="16">16</button><button class="size-btn" data-size="18">18</button><button class="size-btn" data-size="20">20</button><button class="size-btn" data-size="24">24</button>
+        </div></div>
+        <div class="style-section"><label i18n="lbl_text_color">Text Color</label><input type="color" id="text-color-picker" value="#333333"></div>
+        <div class="style-section"><label i18n="lbl_icon">Icon</label><div class="icon-grid" id="icon-grid">
+          <button class="icon-btn" data-icon="📌">📌</button><button class="icon-btn" data-icon="⭐">⭐</button><button class="icon-btn" data-icon="💡">💡</button><button class="icon-btn" data-icon="🔥">🔥</button><button class="icon-btn" data-icon="✅">✅</button><button class="icon-btn" data-icon="❌">❌</button><button class="icon-btn" data-icon="⚡">⚡</button><button class="icon-btn" data-icon="🎯">🎯</button><button class="icon-btn" data-icon="🚀">🚀</button><button class="icon-btn" data-icon="💎">💎</button><button class="icon-btn" data-icon="🔑">🔑</button><button class="icon-btn" data-icon="📝">📝</button>
+        </div></div>
+        <div class="style-section"><label i18n="lbl_priority">Priority</label><div class="priority-options" id="priority-options">
+          <button class="priority-btn" data-priority="0">--</button><button class="priority-btn" data-priority="1">P3</button><button class="priority-btn" data-priority="2">P2</button><button class="priority-btn" data-priority="3">P1</button>
+        </div></div>
+      </div>
+      <div class="panel-content hidden" id="panel-note"><textarea id="note-editor" i18n-placeholder="ph_notes" placeholder="Notes..."></textarea></div>
+      <!-- AI Chat Panel (injected by ai-chat.js at runtime) -->
+      <div id="ai-chat-panel-slot"></div>
+    </div>
+  </div>
+
+  <!-- Context Menu -->
+  <div id="context-menu" class="hidden">
+    <button data-action="add-child"><span i18n="ctx_add_child">Add Child (Tab)</span></button>
+    <button data-action="add-sibling"><span i18n="ctx_add_sibling">Add Sibling (Enter)</span></button>
+    <button data-action="add-parent"><span i18n="ctx_add_parent">Add Parent</span></button>
+    <div class="menu-sep"></div>
+    <button data-action="edit"><span i18n="ctx_edit">Edit (F2)</span></button>
+    <button data-action="change-color"><span i18n="ctx_change_color">Change Color</span></button>
+    <button data-action="copy"><span i18n="ctx_copy">Copy (Ctrl+C)</span></button>
+    <button data-action="cut"><span i18n="ctx_cut">Cut (Ctrl+X)</span></button>
+    <button data-action="paste"><span i18n="ctx_paste">Paste (Ctrl+V)</span></button>
+    <div class="menu-sep"></div>
+    <button data-action="collapse"><span i18n="ctx_collapse">Collapse/Expand (Ctrl+/)</span></button>
+    <button data-action="collapse-all"><span i18n="ctx_collapse_all">Collapse All</span></button>
+    <button data-action="expand-all"><span i18n="ctx_expand_all">Expand All</span></button>
+    <div class="menu-sep"></div>
+    <button data-action="add-relation"><span i18n="ctx_relation">Relation Line</span></button>
+    <button data-action="edit-relations"><span i18n="ctx_edit_relations">Edit Relations</span></button>
+    <button data-action="add-annotation"><span i18n="ctx_annotation">Annotation</span></button>
+    <button data-action="add-boundary"><span i18n="ctx_boundary">Boundary Frame</span></button>
+    <button data-action="add-summary"><span i18n="ctx_summary">Summary</span></button>
+    <div class="menu-sep"></div>
+    <button data-action="show-style"><span i18n="ctx_show_style">Style Panel</span></button>
+    <div class="menu-sep"></div>
+    <button data-action="insert-template-weekly"><span i18n="ctx_tpl_weekly">Weekly Plan Template</span></button>
+    <button data-action="insert-template-project"><span i18n="ctx_tpl_project">Project Template</span></button>
+    <div class="menu-sep"></div>
+    <button data-action="delete" class="danger"><span i18n="ctx_delete">Delete (Del)</span></button>
+  </div>
+
+  <!-- Find Dialog -->
+  <div id="find-dialog" class="hidden">
+    <div class="find-bar">
+      <input type="text" id="find-input" i18n-placeholder="ph_find" placeholder="Find...">
+      <button id="find-next"><svg viewBox="0 0 24 24" width="16" height="16"><polyline points="6 9 12 15 18 9" fill="none" stroke="currentColor" stroke-width="2"/></svg></button>
+      <button id="find-close"><svg viewBox="0 0 24 24" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" stroke-width="2"/><line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" stroke-width="2"/></svg></button>
+    </div>
+  </div>
+
+  <!-- Status Bar -->
+  <div id="status-bar">
+    <span id="status-info">Ready</span>
+    <span id="node-count">Nodes: 1</span>
+    <div class="dropdown" id="lang-dropdown">
+      <button class="tb-btn lang-btn dropdown-trigger" id="btn-lang" title="Language">
+        <svg viewBox="0 0 24 24" width="14" height="14"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+        <span id="btn-lang-text">ZH</span>
+        <svg viewBox="0 0 24 24" width="10" height="10" class="arrow"><polyline points="6 9 12 15 18 9" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+      </button>
+      <div class="dropdown-menu">
+        <button data-lang="auto"><span i18n="lang_auto">Auto Detect</span></button>
+        <button data-lang="zh"><span i18n="lang_zh">Chinese</span></button>
+        <button data-lang="en"><span i18n="lang_en">English</span></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div id="toast-container"></div>
+
+  <script src="js/mindmap.js"></script>
+  <script src="js/layout.js"></script>
+  <script src="js/theme.js"></script>
+  <script src="js/renderer.js"></script>
+  <script src="js/ai-chat.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

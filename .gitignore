@@ -1,0 +1,57 @@
+# ============================================================
+# MindZ - .gitignore
+# ============================================================
+
+# ----- Dependencies -----
+node_modules/
+package-lock.json
+
+# ----- Build output -----
+dist/
+out/
+
+# ----- Temporary / Cache -----
+.temp/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ----- Logs -----
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ----- Environment & Secrets -----
+.env
+.env.*
+!.env.example
+.npmrc
+credentials.json
+*.pem
+*.key
+*.cert
+
+# ----- IDE / Editor -----
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ----- OS files -----
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# ----- Launch scripts (contain local paths) -----
+start.bat
+start.vbs
+
+# ----- User data (runtime) -----
+ai-config.enc
+last-file.txt
+
+# ----- Documentation builds (generated) -----
+MindZ-使用说明.docx
+MindZ-User-Guide.docx

@@ -1,0 +1,83 @@
+{
+  "name": "mindz",
+  "version": "1.0.0",
+  "description": "MindZ 思维导图 - 类万兴脑图桌面应用",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac",
+    "build:all": "electron-builder --win --mac",
+    "pack:win": "electron-builder --win --dir",
+    "pack:mac": "electron-builder --mac --dir"
+  },
+  "author": "MindZ",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1"
+  },
+  "build": {
+    "appId": "com.mindz.app",
+    "productName": "MindZ",
+    "copyright": "Copyright © 2026 MindZ",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*",
+      "assets/**/*"
+    ],
+    "electronLanguages": ["zh-CN", "en-US"],
+    "electronDist": "node_modules/electron/dist",
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "assets/icon.ico",
+      "artifactName": "MindZ-Setup-${version}-Win.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "MindZ MindMap",
+      "uninstallDisplayName": "MindZ MindMap",
+      "deleteAppDataOnUninstall": false,
+      "installerLanguages": ["zh_CN", "en_US"],
+      "multiLanguageInstaller": true
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        }
+      ],
+      "icon": "assets/icon.icns",
+      "artifactName": "MindZ-${version}-Mac.${ext}",
+      "category": "public.app-category.productivity",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "minimumSystemVersion": "12.0.0"
+    },
+    "dmg": {
+      "title": "MindZ 思维导图",
+      "background": null,
+      "contents": [
+        { "x": 130, "y": 220 },
+        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+      ]
+    },
+    "asar": true,
+    "asarUnpack": [
+      "assets/**/*"
+    ]
+  }
+}
