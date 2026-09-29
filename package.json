@@ -18,7 +18,7 @@
   },
   "devDependencies": {
     "electron": "^28.0.0",
-    "electron-builder": "^24.9.1"
+    "electron-builder": "^25.1.8"
   },
   "build": {
     "appId": "com.mindz.app",
@@ -48,7 +48,7 @@
           ]
         }
       ],
-      "icon": "assets/icon_512.png",
+      "icon": "build/icon.png",
       "artifactName": "mindz_${version}_amd64.${ext}",
       "category": "Office",
       "maintainer": "MindZ <mindz@example.com>",
