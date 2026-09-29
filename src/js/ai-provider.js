@@ -6,6 +6,8 @@
 
 const https = require('https');
 const http = require('http');
+const fs = require('fs');
+const path = require('path');
 
 // ============================================================
 // Provider configurations — maps provider name to API details
@@ -110,19 +112,19 @@ class AIProviderManager {
     this.configPath = userDataPath + '/ai-config.enc';
     this.conversationsPath = userDataPath + '/ai-conversations';
     this.config = null;
+    this._currentStreamReq = null; // active streaming request (abort support)
+    this._streamAborted = false;
     this._ensureDir();
     this._loadConfig();
   }
 
   _ensureDir() {
-    const fs = require('fs');
     if (!fs.existsSync(this.conversationsPath)) {
       fs.mkdirSync(this.conversationsPath, { recursive: true });
     }
   }
 
   _loadConfig() {
-    const fs = require('fs');
     try {
       if (fs.existsSync(this.configPath)) {
         const enc = fs.readFileSync(this.configPath, 'utf-8');
@@ -152,7 +154,6 @@ class AIProviderManager {
   }
 
   _saveConfig() {
-    const fs = require('fs');
     try {
       const json = JSON.stringify(this.config, null, 2);
       const enc = encrypt(json);
@@ -277,11 +278,23 @@ class AIProviderManager {
       stream: true
     };
 
-    return new Promise((resolve, reject) => {
-      const urlObj = url.protocol === 'https:' ? require('https') : require('http');
+    return new Promise((resolve) => {
+      const lib = url.protocol === 'https:' ? https : http;
       const reqBody = JSON.stringify(body);
 
-      const req = urlObj.request(url, {
+      let finished = false;
+      const finish = (chunk) => {
+        if (finished) return;
+        finished = true;
+        if (this._currentStreamReq === req) this._currentStreamReq = null;
+        if (chunk) onChunk(chunk);
+        resolve();
+      };
+
+      this._currentStreamReq = null; // only one stream at a time
+      this._streamAborted = false;
+
+      const req = lib.request(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -299,8 +312,7 @@ class AIProviderManager {
             if (line.startsWith('data: ')) {
               const data = line.substring(6).trim();
               if (data === '[DONE]') {
-                onChunk({ done: true });
-                resolve();
+                finish({ done: true });
                 return;
               }
               try {
@@ -313,26 +325,33 @@ class AIProviderManager {
             }
           }
         });
-        res.on('end', () => {
-          onChunk({ done: true });
-          resolve();
+        res.on('end', () => finish({ done: true }));
+        res.on('aborted', () => {
+          // socket cut mid-stream — treat user-requested abort as clean stop
+          finish(this._streamAborted ? { done: true, aborted: true } : { error: 'Connection aborted', done: true });
         });
-        res.on('error', (e) => {
-          onChunk({ error: e.message, done: true });
-          resolve();
-        });
+        res.on('error', (e) => finish({ error: e.message, done: true }));
       });
 
+      this._currentStreamReq = req;
+
       req.on('error', (e) => {
-        const errResult = this._handleError(e, providerKeyToUse);
-        onChunk({ error: errResult.error, done: true });
-        resolve();
+        if (this._streamAborted) {
+          finish({ done: true, aborted: true }); // P0-5: clean stop, not an error
+        } else {
+          const errResult = this._handleError(e, providerKeyToUse);
+          finish({ error: errResult.error, done: true });
+        }
       });
 
       req.on('timeout', () => {
         req.destroy();
-        onChunk({ error: '请求超时，请检查网络或增加超时时间', done: true });
-        resolve();
+        finish({ error: '请求超时，请检查网络或增加超时时间', done: true });
+      });
+
+      req.on('close', () => {
+        // socket closed without end/error (e.g. destroy during connect) — don't hang the promise
+        finish(this._streamAborted ? { done: true, aborted: true } : { error: 'Connection closed', done: true });
       });
 
       req.write(reqBody);
@@ -340,10 +359,18 @@ class AIProviderManager {
     });
   }
 
+  /** P0-5: abort the active streaming request (called from renderer "Stop") */
+  abortActiveStream() {
+    this._streamAborted = true;
+    const req = this._currentStreamReq;
+    if (req) {
+      try { req.destroy(); } catch (e) { /* already gone */ }
+    }
+  }
+
   // --- File Parsing (for document import) ---
 
   parseFile(filePath) {
-    const fs = require('fs');
     const ext = path.extname(filePath).toLowerCase();
 
     try {
@@ -360,18 +387,13 @@ class AIProviderManager {
         }
         case '.docx':
         case '.doc': {
-          // Basic DOCX parsing — extract text from XML
-          // For full support, user can install mammoth: npm i mammoth
-          try {
-            const mammoth = require('mammoth');
-            const AdmZip = require('adm-zip');
-          } catch (e) {
-            // No mammoth — try basic ZIP extraction
-            return this._parseDocxBasic(filePath);
-          }
+          // P0-3: every path returns explicitly — no fall-through into '.pdf'
+          // DOCX is a ZIP with word/document.xml; adm-zip is a declared dependency
+          return this._parseDocxBasic(filePath);
         }
         case '.pdf': {
-          return this._parsePDFBasic(filePath);
+          // PDF parsing intentionally unsupported (no pdf-parse dependency) — clear user guidance
+          return { success: false, error: '暂不支持 PDF 文件，请先另存为 TXT/MD/DOCX 格式后再导入' };
         }
         default:
           return { success: false, error: `不支持的文件格式: ${ext}` };
@@ -397,31 +419,26 @@ class AIProviderManager {
       const AdmZip = require('adm-zip');
       const zip = new AdmZip(filePath);
       const xmlData = zip.readAsText('word/document.xml');
-      // Strip XML tags, keep text content
+      if (!xmlData) {
+        return { success: false, error: 'Word 文件内未找到正文内容（可能是旧版 .doc 二进制格式，请另存为 .docx 后导入）' };
+      }
+      // Paragraph-aware extraction: keep line breaks between <w:p> blocks, strip all tags
       const text = xmlData
+        .replace(/<w:p[ >][^>]*>|<w:p>/g, '\n')
+        .replace(/<w:br\s*\/?>/g, '\n')
         .replace(/<[^>]+>/g, ' ')
-        .replace(/\s+/g, ' ')
+        .replace(/[ \t]+/g, ' ')
+        .replace(/ ?\n ?/g, '\n')
         .trim();
       return { success: true, text: this._cleanText(text), fileName: path.basename(filePath) };
     } catch (e) {
-      return { success: false, error: 'Word 文件解析需要安装 adm-zip 包。请在终端运行: npm install adm-zip' };
-    }
-  }
-
-  _parsePDFBasic(filePath) {
-    try {
-      const AdmZip = require('adm-zip');
-      // PDF is not a standard ZIP, need a different approach
-      return { success: false, error: 'PDF 文件解析需要安装 pdf-parse 包。请在终端运行: npm install pdf-parse' };
-    } catch (e) {
-      return { success: false, error: 'PDF 文件解析暂不可用，请先转换为 TXT 格式' };
+      return { success: false, error: 'Word 文件解析失败：' + (e.message || '未知错误') };
     }
   }
 
   // --- Conversation History ---
 
   saveConversation(convId, messages) {
-    const fs = require('fs');
     try {
       const data = { id: convId, messages, updatedAt: Date.now() };
       fs.writeFileSync(this.conversationsPath + '/' + convId + '.json', JSON.stringify(data, null, 2), 'utf-8');
@@ -432,7 +449,6 @@ class AIProviderManager {
   }
 
   loadConversation(convId) {
-    const fs = require('fs');
     try {
       const data = fs.readFileSync(this.conversationsPath + '/' + convId + '.json', 'utf-8');
       return { success: true, data: JSON.parse(data) };
@@ -442,7 +458,6 @@ class AIProviderManager {
   }
 
   listConversations() {
-    const fs = require('fs');
     try {
       const files = fs.readdirSync(this.conversationsPath).filter(f => f.endsWith('.json'));
       const convs = [];
@@ -467,7 +482,6 @@ class AIProviderManager {
   }
 
   deleteConversation(convId) {
-    const fs = require('fs');
     try {
       fs.unlinkSync(this.conversationsPath + '/' + convId + '.json');
       return { success: true };

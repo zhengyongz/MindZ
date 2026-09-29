@@ -116,6 +116,16 @@ class MindMapRenderer {
     this._updateMinimap();
   }
 
+  /** P2-11: coalesce high-frequency renders (drag mousemove) into one per animation frame */
+  _scheduleRender() {
+    if (this._renderQueued) return;
+    this._renderQueued = true;
+    requestAnimationFrame(() => {
+      this._renderQueued = false;
+      this.render();
+    });
+  }
+
   refresh() { this.render(); }
 
   // ============================================================
@@ -221,6 +231,8 @@ class MindMapRenderer {
       const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
       line.setAttribute('class', 'connection-line');
       line.setAttribute('stroke', color);
+      // inline fill so exported SVG (no CSS) doesn't render black-filled paths
+      line.setAttribute('fill', 'none');
       line.setAttribute('stroke-width', Math.max(1, theme.connectionWidth - depth * 0.3));
       line.setAttribute('data-from', node.id); line.setAttribute('data-to', child.id);
       line.setAttribute('d', this._getConnectionPath(node, child));
@@ -906,7 +918,7 @@ class MindMapRenderer {
 
     if (this.isDraggingRelPoint && this.draggingRelId) {
       const rel = this.data.relationships.find(r=>r.id===this.draggingRelId);
-      if (rel && rel.controlPoints[this.draggingPointIdx]) { rel.controlPoints[this.draggingPointIdx]={x:world.x,y:world.y}; this.render(); } return;
+      if (rel && rel.controlPoints[this.draggingPointIdx]) { rel.controlPoints[this.draggingPointIdx]={x:world.x,y:world.y}; this._scheduleRender(); } return;
     }
 
     // Relationship line whole drag
@@ -931,7 +943,7 @@ class MindMapRenderer {
             ];
           }
         }
-        this.render();
+        this._scheduleRender();
       }
       return;
     }
@@ -942,7 +954,7 @@ class MindMapRenderer {
       if (ann) {
         ann._offsetX = this.dragAnnStartOX + (world.x - this.dragAnnStartWorldX);
         ann._offsetY = this.dragAnnStartOY + (world.y - this.dragAnnStartWorldY);
-        this.render();
+        this._scheduleRender();
       }
       return;
     }
@@ -960,7 +972,7 @@ class MindMapRenderer {
         n.children.forEach(moveSubtree);
       };
       moveSubtree(this.dragNode);
-      this.render(); return;
+      this._scheduleRender(); return;
     }
 
     if (this.isCreatingRel && this.relFromNode) { this._showTempRelationLine(this.relFromNode, world.x, world.y); return; }
@@ -1036,7 +1048,11 @@ class MindMapRenderer {
   _updateMinimap() {
     const canvas=document.getElementById('minimap-canvas');if(!canvas)return;
     const ctx=canvas.getContext('2d'),dpr=window.devicePixelRatio||1;
-    canvas.width=160*dpr;canvas.height=100*dpr;ctx.scale(dpr,dpr);ctx.clearRect(0,0,160,100);
+    // P2-14: avoid resetting the canvas (full clear + resize) on every high-frequency
+    // call — only when the DPR actually changes; a tiny clear is enough otherwise
+    if (canvas._dpr !== dpr) { canvas._dpr = dpr; canvas.width=160*dpr;canvas.height=100*dpr; }
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.clearRect(0,0,160,100);
     const bounds=this._getNodesBounds();if(!bounds)return;
     const p=10,cw=bounds.maxX-bounds.minX,ch=bounds.maxY-bounds.minY;
     const ms=Math.min((160-p*2)/cw,(100-p*2)/ch)*0.8;
@@ -1053,25 +1069,9 @@ class MindMapRenderer {
     clone.querySelectorAll('.selected').forEach(el=>el.classList.remove('selected'));
     clone.querySelectorAll('.rel-control-point').forEach(el=>el.remove());
     clone.querySelectorAll('.collapse-btn').forEach(el=>el.remove());
-
-    // Inline computed styles for key SVG elements so the export is self-contained
-    const inlineStyles = (parent) => {
-      parent.querySelectorAll('rect, ellipse, polygon, path, circle, text, line').forEach(el => {
-        const cs = window.getComputedStyle(this.svg.querySelector(`[data-id="${el.getAttribute('data-id')}"]`) || el);
-        // For text elements, inline font and fill
-        if (el.tagName === 'text') {
-          if (!el.getAttribute('fill')) el.setAttribute('fill', cs.fill || '#333');
-          if (!el.getAttribute('font-size')) el.setAttribute('font-size', cs.fontSize || '14');
-          if (!el.getAttribute('font-family')) el.setAttribute('font-family', cs.fontFamily || 'sans-serif');
-        }
-        // For shape elements, inline fill and stroke
-        if (['rect','ellipse','polygon','circle'].includes(el.tagName)) {
-          if (!el.getAttribute('fill') || el.getAttribute('fill') === '') el.setAttribute('fill', cs.fill || 'none');
-          if (!el.getAttribute('stroke') || el.getAttribute('stroke') === '') el.setAttribute('stroke', cs.stroke || 'none');
-        }
-      });
-    };
-    try { inlineStyles(clone); } catch(e) {}
+    // P3: removed the old inlineStyles pass — it called getComputedStyle on elements of a
+    // detached clone (always empty) and could not work. All critical styles (fill/stroke/
+    // font) are now set as real attributes at render time, so exports are self-contained.
 
     // Calculate bounds including ALL elements (nodes + summaries + boundaries + relationships + annotations)
     const b = this._getAllBounds();

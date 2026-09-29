@@ -3,9 +3,8 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('electronAPI', {
   // 菜单事件
   onMenuAction: (callback) => ipcRenderer.on('menu-action', (event, action, data) => callback(action, data)),
-  
-  // 文件操作
-  onFileOpened: (callback) => ipcRenderer.on('file-opened', (event, data) => callback(data)),
+
+  // 文件操作（P0-4：文件对话框与打开流程由渲染进程统一处理，不再需要 file-opened 通道）
   saveFile: (filePath, content) => ipcRenderer.invoke('save-file', { filePath, content }),
   readFile: (filePath) => ipcRenderer.invoke('read-file', filePath),
   
@@ -29,6 +28,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   aiSetDefaultProvider: (providerKey) => ipcRenderer.invoke('ai-set-default-provider', { providerKey }),
   aiChat: (providerKey, messages, options) => ipcRenderer.invoke('ai-chat', { providerKey, messages, options }),
   aiChatStream: (providerKey, messages, options) => ipcRenderer.invoke('ai-chat-stream', { providerKey, messages, options }),
+  aiAbortStream: () => ipcRenderer.invoke('ai-abort-stream'),
   onAiChatChunk: (callback) => ipcRenderer.on('ai-chat-chunk', (event, chunk) => callback(chunk)),
   removeAiChatChunkListener: () => ipcRenderer.removeAllListeners('ai-chat-chunk'),
   aiParseFile: (filePath) => ipcRenderer.invoke('ai-parse-file', { filePath }),

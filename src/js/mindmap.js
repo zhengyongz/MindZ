@@ -178,11 +178,12 @@ class MindMapData {
     this._emit('node-updated', { node, field: 'text', oldValue: oldText, newValue: text });
   }
 
-  updateNodeStyle(node, styleKey, styleValue) {
+  updateNodeStyle(node, styleKey, styleValue, deferHistory) {
     if (!node) return;
     const oldValue = node.style[styleKey];
     node.style[styleKey] = styleValue;
-    this._saveHistory();
+    // deferHistory=true: live preview (e.g. color picker drag) — caller commits history once on change
+    if (!deferHistory) this._saveHistory();
     this._emit('node-updated', { node, field: 'style.' + styleKey, oldValue, newValue: styleValue });
   }
 
@@ -269,7 +270,8 @@ class MindMapData {
 
   paste(targetNode) {
     if (!targetNode || !this.clipboard) return null;
-    const newNode = this._deserializeNode(this.clipboard, targetNode);
+    // regenerateIds=true: pasted subtree must get fresh ids (serialize now stores ids — P0-2)
+    const newNode = this._deserializeNode(this.clipboard, targetNode, true);
     targetNode.children.push(newNode);
     this._updateDepths(newNode);
     this._registerNodes(newNode);
@@ -468,6 +470,7 @@ class MindMapData {
   // ============================================================
   _serializeNode(node) {
     return {
+      id: node.id, // P0-2: persist node ids so relationship/annotation/boundary/summary targets survive reload
       text: node.text,
       style: { ...node.style },
       note: node.note,
@@ -479,7 +482,7 @@ class MindMapData {
     };
   }
 
-  _deserializeNode(data, parent) {
+  _deserializeNode(data, parent, regenerateIds) {
     const node = this._createNode(data.text, {
       shape: data.style?.shape,
       fillColor: data.style?.fillColor,
@@ -490,6 +493,9 @@ class MindMapData {
       priority: data.style?.priority,
       isRoot: false,
     });
+    // P0-2: restore the original id when present (older files without ids fall back to traversal order);
+    // regenerateIds (paste) keeps the fresh id from _createNode to avoid duplicates
+    if (data.id && !regenerateIds) node.id = data.id;
     node.parent = parent;
     node.note = data.note || '';
     node.collapsed = data.collapsed || false;
@@ -526,6 +532,8 @@ class MindMapData {
     this.boundaries = json.boundaries || [];
     this.summaries = json.summaries || [];
     this.language = json.language || 'zh';
+
+    this._resyncIdCounter();
 
     this.selectedNode = this.root;
     this.history = [];
@@ -688,6 +696,7 @@ ${nodeToXml(this.root, 1)}
     this.boundaries = state.boundaries || [];
     this.summaries = state.summaries || [];
     this.language = state.language || 'zh';
+    this._resyncIdCounter();
     if (this.selectedNode && !this.nodeMap.has(this.selectedNode.id)) {
       this.selectedNode = this.root;
     }
@@ -700,12 +709,34 @@ ${nodeToXml(this.root, 1)}
     node.children.forEach(c => this._updateDepths(c));
   }
 
+  /**
+   * P0-2: after loading persisted ids, bump _idCounter above every existing id
+   * so newly created nodes never collide with restored ones.
+   */
+  _resyncIdCounter() {
+    let max = 0;
+    const scan = (id) => {
+      const m = /^(?:node|rel|ann|bound|sum)_(\d+)$/.exec(id || '');
+      if (m) max = Math.max(max, parseInt(m[1], 10));
+    };
+    this.nodeMap.forEach(n => scan(n.id));
+    this.relationships.forEach(r => scan(r.id));
+    this.annotations.forEach(a => scan(a.id));
+    this.boundaries.forEach(b => scan(b.id));
+    this.summaries.forEach(s => scan(s.id));
+    if (max > this._idCounter) this._idCounter = max;
+  }
+
   // ===== Event System =====
   on(event, callback) { this._listeners.push({ event, callback }); }
   off(event, callback) { this._listeners = this._listeners.filter(l => l.event !== event || l.callback !== callback); }
 
   _emit(event, data) {
-    this._listeners.filter(l => l.event === event).forEach(l => l.callback(data));
-    this._listeners.filter(l => l.event === '*').forEach(l => l.callback({ event, data }));
+    // single pass over listeners (P3 micro-opt: was two filter passes)
+    for (let i = 0; i < this._listeners.length; i++) {
+      const l = this._listeners[i];
+      if (l.event === event) l.callback(data);
+      else if (l.event === '*') l.callback({ event, data });
+    }
   }
 }

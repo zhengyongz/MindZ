@@ -13,6 +13,9 @@
   },
   "author": "MindZ",
   "license": "MIT",
+  "dependencies": {
+    "adm-zip": "^0.5.16"
+  },
   "devDependencies": {
     "electron": "^28.0.0",
     "electron-builder": "^24.9.1"
@@ -28,15 +31,21 @@
       "main.js",
       "preload.js",
       "src/**/*",
-      "assets/**/*"
+      "assets/**/*",
+      "node_modules/**"
     ],
-    "electronLanguages": ["zh-CN", "en-US"],
+    "electronLanguages": [
+      "zh-CN",
+      "en-US"
+    ],
     "electronDist": "node_modules/electron/dist",
     "win": {
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "assets/icon.ico",
@@ -50,14 +59,20 @@
       "shortcutName": "MindZ MindMap",
       "uninstallDisplayName": "MindZ MindMap",
       "deleteAppDataOnUninstall": false,
-      "installerLanguages": ["zh_CN", "en_US"],
+      "installerLanguages": [
+        "zh_CN",
+        "en_US"
+      ],
       "multiLanguageInstaller": true
     },
     "mac": {
       "target": [
         {
           "target": "dmg",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
       ],
       "icon": "assets/icon.icns",
@@ -71,13 +86,24 @@
       "title": "MindZ 思维导图",
       "background": null,
       "contents": [
-        { "x": 130, "y": 220 },
-        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
       ]
     },
     "asar": true,
     "asarUnpack": [
       "assets/**/*"
     ]
+  },
+  "allowScripts": {
+    "electron@28.3.3": true
   }
 }

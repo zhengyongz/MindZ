@@ -55,3 +55,6 @@ last-file.txt
 # ----- Documentation builds (generated) -----
 MindZ-使用说明.docx
 MindZ-User-Guide.docx
+
+# ----- Workbuddy review artifacts -----
+.workbuddy/

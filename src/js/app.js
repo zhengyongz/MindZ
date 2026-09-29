@@ -57,8 +57,6 @@ class MindMapApp {
       }
     };
 
-    this._bindDataEvents();
-
     this._initI18n();
     this._detectLanguage();
     this._applyLanguage();
@@ -115,13 +113,27 @@ class MindMapApp {
       name: name || (this.lang === 'zh' ? '未命名' : 'Untitled'),
       viewState: { viewX: 0, viewY: 0, scale: 1 }
     };
+    // Bind data events ONCE per document (P2-13: never re-bind on tab switch)
+    data.on('*', () => this._onDataChanged(doc));
     this.documents.push(doc);
     return doc;
   }
 
-  _bindDataEvents() {
-    if (!this.data) return;
-    this.data.on('*', () => { this.isModified = true; this.renderer.render(); this._updateStatus(); this._updateOutline(); this._renderTabBar(); });
+  /** Central data-change handler — one listener per document, forever */
+  _onDataChanged(doc) {
+    doc.isModified = true;
+    // Background document: just mark modified, no rendering
+    if (doc !== this.documents[this.activeDocIndex]) return;
+    this.renderer.render();
+    this._updateStatus();
+    this._updateOutlineDebounced();
+    this._renderTabBar();
+  }
+
+  /** Debounced outline rebuild — avoids heavy DOM work on rapid changes (P2-11) */
+  _updateOutlineDebounced() {
+    clearTimeout(this._outlineTimer);
+    this._outlineTimer = setTimeout(() => this._updateOutline(), 150);
   }
 
   _saveCurrentViewState() {
@@ -149,10 +161,7 @@ class MindMapApp {
     this.renderer.viewY = doc.viewState.viewY;
     this.renderer.scale = doc.viewState.scale;
 
-    // Re-bind data events for new document
-    this._bindDataEvents();
-
-    // Re-render
+    // Re-render (data events are already bound once per document)
     this.renderer.render();
     this.renderer._updateViewport();
     this._updateZoomLabel();
@@ -196,7 +205,7 @@ class MindMapApp {
     setTimeout(() => { this.renderer.fitCanvas(); this._updateZoomLabel(); }, 50);
   }
 
-  _closeTab(index) {
+  async _closeTab(index) {
     if (this.documents.length <= 1) {
       // Don't close the last tab — just clear it
       this._newFile();
@@ -205,9 +214,39 @@ class MindMapApp {
 
     const doc = this.documents[index];
 
-    // If modified, ask to save (simplified — just auto-save if has filePath)
-    if (doc.isModified && doc.filePath) {
-      this._autoSaveDoc(doc);
+    // P0-6: never silently discard unsaved work
+    if (doc.isModified) {
+      if (doc.filePath) {
+        // Previously saved file — auto-save quietly
+        this._autoSaveDoc(doc);
+      } else {
+        // Never-saved document with modifications — ask the user
+        const doSave = confirm(
+          this.lang === 'zh'
+            ? `“${doc.name}”` + this._t('close_save_confirm')
+            : `"${doc.name}" ` + this._t('close_save_confirm')
+        );
+        if (doSave) {
+          const r = await window.electronAPI.showSaveDialog({
+            title: this._t('save_before_new'),
+            filters: [
+              { name: 'MindZ', extensions: ['mindz'] },
+              { name: 'JSON', extensions: ['json'] },
+              { name: 'FreeMind', extensions: ['mm'] }
+            ],
+            defaultPath: 'untitled.mindz'
+          });
+          if (r.canceled) return; // user backed out — keep the tab open
+          const sr = await window.electronAPI.saveFile(r.filePath, JSON.stringify(doc.data.toJSON(), null, 2));
+          if (!sr.success) {
+            this._showToast('Failed: ' + sr.error, 'error');
+            return; // save failed — keep the tab open
+          }
+        } else {
+          const doDiscard = confirm(this._t('close_discard_confirm'));
+          if (!doDiscard) return; // keep the tab open
+        }
+      }
     }
 
     this.documents.splice(index, 1);
@@ -228,7 +267,6 @@ class MindMapApp {
     this.renderer.viewY = activeDoc.viewState.viewY;
     this.renderer.scale = activeDoc.viewState.scale;
 
-    this._bindDataEvents();
     this.renderer.render();
     this.renderer._updateViewport();
     this._updateZoomLabel();
@@ -287,8 +325,19 @@ class MindMapApp {
       const tab = document.createElement('div');
       tab.className = 'tab-item' + (i === this.activeDocIndex ? ' active' : '') + (doc.isModified ? ' modified' : '');
       tab.dataset.index = i;
-      tab.innerHTML = `<span class="tab-label">${doc.name}</span>` +
-        (this.documents.length > 1 ? `<button class="tab-close" data-index="${i}" title="Close">\u00d7</button>` : '');
+      // P1-7: use textContent for untrusted doc names (from file names) — never innerHTML
+      const label = document.createElement('span');
+      label.className = 'tab-label';
+      label.textContent = doc.name;
+      tab.appendChild(label);
+      if (this.documents.length > 1) {
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'tab-close';
+        closeBtn.dataset.index = i;
+        closeBtn.title = 'Close';
+        closeBtn.textContent = '\u00d7';
+        tab.appendChild(closeBtn);
+      }
       tabList.appendChild(tab);
     });
   }
@@ -296,27 +345,31 @@ class MindMapApp {
   async _loadLastFileOrTemplate() {
     if (window.electronAPI) {
       try {
+        // P0-1: renderer process has no require('path') — join manually (same as _saveLastFilePath)
         const appPath = await window.electronAPI.getAppPath();
-        const lastFilePath = await window.electronAPI.readFile(
-          require('path').join(appPath, 'last-file.txt')
-        );
+        const lastFilePath = await window.electronAPI.readFile(appPath + '/last-file.txt');
         if (lastFilePath.success && lastFilePath.content) {
           const fp = lastFilePath.content.trim();
-          const rr = await window.electronAPI.readFile(fp);
-          if (rr.success) {
-            const j = JSON.parse(rr.content);
-            if (this.data.fromJSON(j)) {
-              this.currentFile = fp;
-              this.isModified = false;
-              // Update first document name to match filename
-              const doc = this.documents[0];
-              if (doc) doc.name = fp.split(/[\\/]/).pop().replace(/\.(mindz|json)$/i, '');
-              this._renderTabBar();
-              return; // Successfully loaded last file
+          if (fp) {
+            const rr = await window.electronAPI.readFile(fp);
+            if (rr.success) {
+              const j = JSON.parse(rr.content);
+              if (this.data.fromJSON(j)) {
+                this.currentFile = fp;
+                this.isModified = false;
+                // Update first document name to match filename
+                const doc = this.documents[0];
+                if (doc) doc.name = fp.split(/[\\/]/).pop().replace(/\.(mindz|json)$/i, '');
+                this._renderTabBar();
+                return; // Successfully loaded last file
+              }
             }
           }
         }
-      } catch (e) { /* ignore — fall through to default template */ }
+      } catch (e) {
+        // Distinguish real failures from "no last file yet" instead of swallowing silently
+        console.warn('Load last file skipped:', e.message);
+      }
     }
     // No last file or failed to load — use default template
     this._applyDefaultTemplate();
@@ -338,6 +391,8 @@ class MindMapApp {
         toast_saved: '保存成功',
         toast_auto_saved: '已自动保存',
         save_before_new: '保存当前文件',
+        close_save_confirm: ' 有未保存的修改，关闭前保存吗？（取消将询问是否放弃）',
+        close_discard_confirm: '确定放弃修改并直接关闭？',
         toast_export_ok: '导出成功',
         toast_export_fail: '导出失败',
         toast_undo: '已撤销',
@@ -516,6 +571,8 @@ class MindMapApp {
         toast_saved: 'Saved successfully',
         toast_auto_saved: 'Auto saved',
         save_before_new: 'Save current file',
+        close_save_confirm: ' has unsaved changes. Save before closing? (Cancel will ask to discard)',
+        close_discard_confirm: 'Discard changes and close anyway?',
         toast_export_ok: 'Exported successfully',
         toast_export_fail: 'Export failed',
         toast_undo: 'Undone',
@@ -949,8 +1006,11 @@ class MindMapApp {
         this.data.updateNodeStyle(n, 'fontSize', parseInt(btn.dataset.size));
       };
     });
-    // Text color
+    // Text color — P2-12: continuous input defers history commit until change (blur)
     $('text-color-picker').oninput = (e) => {
+      const n = this.data.selectedNode; if (n) this.data.updateNodeStyle(n, 'textColor', e.target.value, true);
+    };
+    $('text-color-picker').onchange = (e) => {
       const n = this.data.selectedNode; if (n) this.data.updateNodeStyle(n, 'textColor', e.target.value);
     };
     // Icons
@@ -969,9 +1029,14 @@ class MindMapApp {
         this.data.updateNodeStyle(n, 'priority', parseInt(btn.dataset.priority));
       };
     });
-    // Note
+    // Note — P2-12: live-preview without spamming history; commit one history entry on change
     $('note-editor').oninput = () => {
-      const n = this.data.selectedNode; if (n) n.note = $('note-editor').value;
+      const n = this.data.selectedNode;
+      if (n) { n.note = $('note-editor').value; this.isModified = true; }
+    };
+    $('note-editor').onchange = () => {
+      const n = this.data.selectedNode;
+      if (n) this.data.updateNodeNote(n, $('note-editor').value);
     };
   }
 
@@ -1184,9 +1249,12 @@ class MindMapApp {
     if (!window.electronAPI) return;
     window.electronAPI.onMenuAction((action, data) => {
       switch (action) {
+        // P0-4: File menu actions go through the renderer so paths follow the
+        // active tab (multi-tab safe), .mm is supported, and unsaved work is honored
+        case 'open':     this._openFile(); break;
+        case 'save':     this._saveFile(); break;
+        case 'save-as':  this._saveFile(null, true); break;
         case 'new': this._newFile(); break;
-        case 'save': this._saveFile(data); break;
-        case 'save-as': this._saveFile(data); break;
         case 'undo': this._undo(); break;
         case 'redo': this._redo(); break;
         case 'cut': if (this.data.selectedNode) this.data.cut(this.data.selectedNode); break;
@@ -1221,21 +1289,6 @@ class MindMapApp {
         case 'export-pdf': this._export('pdf'); break;
         case 'export-json': this._export('json'); break;
         case 'export-mm': this._export('mm'); break;
-      }
-    });
-
-    window.electronAPI.onFileOpened(({ content, filePath }) => {
-      try {
-        const json = JSON.parse(content);
-        if (this.data.fromJSON(json)) {
-          this.currentFile = filePath;
-          this.isModified = false;
-          this.renderer.render();
-          this.renderer.fitCanvas();
-          this._showToast('Opened: ' + filePath, 'success');
-        }
-      } catch (err) {
-        this._showToast('Format error: ' + err.message, 'error');
       }
     });
   }
@@ -1294,8 +1347,8 @@ class MindMapApp {
     overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
   }
 
-  _undo()   { if (this.data.undo())   { this.renderer.render(); this._showToast(this._t('toast_undo')); } }
-  _redo()   { if (this.data.redo())   { this.renderer.render(); this._showToast(this._t('toast_redo')); } }
+  _undo()   { if (this.data.undo())   { this.renderer.render(); this._onNodeSelected(this.data.selectedNode); this._showToast(this._t('toast_undo')); } }
+  _redo()   { if (this.data.redo())   { this.renderer.render(); this._onNodeSelected(this.data.selectedNode); this._showToast(this._t('toast_redo')); } }
 
   _startEditNode(node) {
     if (!node) return;
@@ -1393,7 +1446,7 @@ class MindMapApp {
         '<div class="dialog-title">' + this._t('rel_dialog_title') + '</div>' +
         '<div class="dialog-body">' +
           '<label>' + this._t('rel_label_placeholder') + '</label>' +
-          '<input type="text" id="rel-label" value="' + rel.label.replace(/"/g,'&quot;') + '" placeholder="' + this._t('rel_label_placeholder') + '">' +
+           '<input type="text" id="rel-label" value="' + _escHtml(rel.label) + '" placeholder="' + this._t('rel_label_placeholder') + '">' +
           '<div class="dialog-row"><div class="dialog-col"><label>Color</label><input type="color" id="rel-color" value="' + rel.color + '"></div>' +
           '<div class="dialog-col"><label>Width</label><select id="rel-width">' +
             '<option value="1"' + (rel.lineWidth===1?' selected':'') + '>1px</option>' +
@@ -1495,11 +1548,12 @@ class MindMapApp {
     rels.forEach(r => {
       const fromN = this.data.getNode(r.fromId);
       const toN = this.data.getNode(r.toId);
-      html += '<div class="rel-list-item" data-rel-id="' + r.id + '">' +
-        '<span class="rel-info">' + (fromN ? fromN.text : '?') + ' → ' + (toN ? toN.text : '?') + '</span>' +
-        (r.label ? '<span class="rel-tag">' + r.label + '</span>' : '') +
-        '<button class="rel-edit-btn" data-id="' + r.id + '">Edit</button>' +
-        '<button class="rel-del-btn" data-id="' + r.id + '">X</button></div>';
+      // P1-7: escape untrusted node/label text in HTML
+      html += '<div class="rel-list-item" data-rel-id="' + _escHtml(r.id) + '">' +
+        '<span class="rel-info">' + (fromN ? _escHtml(fromN.text) : '?') + ' → ' + (toN ? _escHtml(toN.text) : '?') + '</span>' +
+        (r.label ? '<span class="rel-tag">' + _escHtml(r.label) + '</span>' : '') +
+        '<button class="rel-edit-btn" data-id="' + _escHtml(r.id) + '">Edit</button>' +
+        '<button class="rel-del-btn" data-id="' + _escHtml(r.id) + '">X</button></div>';
     });
     html += '</div><div class="dialog-footer"><button class="dialog-btn" id="rels-close">Close</button></div></div>';
     overlay.innerHTML = html;
@@ -1558,7 +1612,7 @@ class MindMapApp {
         '<div class="dialog-title">' + this._t('ann_dialog_title') + '</div>' +
         '<div class="dialog-body">' +
           '<label>' + this._t('ann_text_placeholder') + '</label>' +
-          '<textarea id="ann-text" rows="2" placeholder="' + this._t('ann_text_placeholder') + '">' + ann.text + '</textarea>' +
+           '<textarea id="ann-text" rows="2" placeholder="' + this._t('ann_text_placeholder') + '">' + _escHtml(ann.text) + '</textarea>' +
           '<div class="dialog-row"><div class="dialog-col"><label>Position</label><select id="ann-pos">' +
             '<option value="right-top"' + (ann.position==='right-top'?' selected':'') + '>' + this._t('pos_right_top') + '</option>' +
             '<option value="right-bottom"' + (ann.position==='right-bottom'?' selected':'') + '>' + this._t('pos_right_bottom') + '</option>' +
@@ -1614,7 +1668,7 @@ class MindMapApp {
         '<div class="dialog-title">' + this._t('bound_dialog_title') + '</div>' +
         '<div class="dialog-body">' +
           '<label>' + this._t('bound_label_placeholder') + '</label>' +
-          '<input type="text" id="bound-label" value="' + bound.label.replace(/"/g,'&quot;') + '" placeholder="' + this._t('bound_label_placeholder') + '">' +
+           '<input type="text" id="bound-label" value="' + _escHtml(bound.label) + '" placeholder="' + this._t('bound_label_placeholder') + '">' +
           '<div class="dialog-row"><div class="dialog-col"><label>Color</label><input type="color" id="bound-color" value="' + bound.color + '"></div>' +
           '<div class="dialog-col"><label>Fill</label><input type="color" id="bound-fill" value="' + (bound.fillColor||'#ffffff') + '"></div></div>' +
           '<label>' + this._t('solid_line') + '/' + this._t('dashed_line') + '/' + this._t('dotted_line') + '</label>' +
@@ -1684,7 +1738,8 @@ class MindMapApp {
     let childOpts = '';
     if (parentNode) {
       parentNode.children.forEach((c, i) => {
-        childOpts += '<option value="' + i + '">' + (i+1) + '. ' + c.text.substring(0,20) + '</option>';
+        // P1-7: escape untrusted node text in option labels
+        childOpts += '<option value="' + i + '">' + (i+1) + '. ' + _escHtml(c.text.substring(0,20)) + '</option>';
       });
     }
 
@@ -1697,7 +1752,7 @@ class MindMapApp {
           '<label>' + (this._t('sum_range_end') || '结束项') + '</label>' +
           '<select id="sum-end" style="width:100%">' + childOpts + '</select>' +
           '<label>' + (this._t('sum_text_placeholder') || '概要内容') + '</label>' +
-          '<input type="text" id="sum-text" value="' + sum.text.replace(/"/g,'&quot;') + '" placeholder="' + this._t('sum_text_placeholder') + '">' +
+           '<input type="text" id="sum-text" value="' + _escHtml(sum.text) + '" placeholder="' + this._t('sum_text_placeholder') + '">' +
           '<div class="dialog-row"><div class="dialog-col"><label>Color</label><input type="color" id="sum-color" value="' + sum.color + '"></div></div>' +
         '</div>' +
         '<div class="dialog-footer">' +
@@ -1933,7 +1988,6 @@ class MindMapApp {
       doc.name = this.lang === 'zh' ? '未命名' : 'Untitled';
       this._applyDefaultTemplate();
       this.renderer.data = this.data;
-      this._bindDataEvents();
       this.renderer.render();
       this.renderer.fitCanvas();
       this._renderTabBar();
@@ -1989,7 +2043,6 @@ class MindMapApp {
         doc.data.init();
         loadIntoDoc(doc);
         this.renderer.data = this.data;
-        this._bindDataEvents();
         this.renderer.render();
         this.renderer.fitCanvas();
         this._renderTabBar();
@@ -1999,9 +2052,10 @@ class MindMapApp {
     } catch (err) { this._showToast('Format error: ' + err.message, 'error'); }
   }
 
-  async _saveFile(fp) {
+  async _saveFile(fp, forceSaveAs) {
     if (!window.electronAPI) return;
-    if (!fp && !this.currentFile) {
+    // forceSaveAs (menu Save As) always shows the dialog
+    if (!fp && (forceSaveAs || !this.currentFile)) {
       const r = await window.electronAPI.showSaveDialog({
         title: 'Save',
         filters: [{ name: 'MindZ', extensions: ['mindz'] }, { name: 'JSON', extensions: ['json'] }, { name: 'FreeMind', extensions: ['mm'] }],
@@ -2183,4 +2237,14 @@ class MindMapApp {
 }
 
 function $(id) { return document.getElementById(id.replace(/^#/, '')); }
+
+/** Escape untrusted text for safe interpolation into HTML attributes/content (P1-7) */
+function _escHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 const app = new MindMapApp();

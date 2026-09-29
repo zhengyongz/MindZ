@@ -51,7 +51,7 @@ function createWindow() {
     height: 900,
     minWidth: 900,
     minHeight: 600,
-    icon: path.join(__dirname, 'assets', 'icon.ico'),
+    icon: path.join(__dirname, 'assets', process.platform === 'win32' ? 'icon.ico' : 'icon_256.png'),
     title: 'MindZ 思维导图',
     // Dark background matching CSS body — prevents white→dark flash
     backgroundColor: '#1e1e2e',
@@ -60,7 +60,7 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false
+      sandbox: true // P1-10: preload only needs ipcRenderer/contextBridge — tighten attack surface
     }
   });
 
@@ -88,10 +88,12 @@ function buildMenu(lang) {
       label: t.file,
       submenu: [
         { label: t.new, accelerator: 'CmdOrCtrl+N', click: () => mainWindow.webContents.send('menu-action', 'new') },
-        { label: t.open, accelerator: 'CmdOrCtrl+O', click: () => handleOpen() },
+        // P0-4: open/save now handled entirely by the renderer so the active tab's
+        // path is used (multi-tab safe), .mm is supported, and unsaved work is honored
+        { label: t.open, accelerator: 'CmdOrCtrl+O', click: () => mainWindow.webContents.send('menu-action', 'open') },
         { type: 'separator' },
-        { label: t.save, accelerator: 'CmdOrCtrl+S', click: () => handleSave() },
-        { label: t.saveAs, accelerator: 'CmdOrCtrl+Shift+S', click: () => handleSaveAs() },
+        { label: t.save, accelerator: 'CmdOrCtrl+S', click: () => mainWindow.webContents.send('menu-action', 'save') },
+        { label: t.saveAs, accelerator: 'CmdOrCtrl+Shift+S', click: () => mainWindow.webContents.send('menu-action', 'save-as') },
         { type: 'separator' },
         { label: t.exportPNG, click: () => mainWindow.webContents.send('menu-action', 'export-png') },
         { label: t.exportSVG, click: () => mainWindow.webContents.send('menu-action', 'export-svg') },
@@ -134,10 +136,13 @@ function buildMenu(lang) {
     {
       label: t.insert,
       submenu: [
-        { label: t.childNode, accelerator: 'Tab', click: () => mainWindow.webContents.send('menu-action', 'insert-child') },
-        { label: t.siblingNode, accelerator: 'Enter', click: () => mainWindow.webContents.send('menu-action', 'insert-sibling') },
+        // P1-9: Tab/Enter/Shift+Tab must NOT be menu accelerators — they hijack typing
+        // in the node editor and the AI chat input. The renderer's keydown handler
+        // implements them natively; menu labels keep the shortcut hint for discoverability.
+        { label: t.childNode + ' (Tab)', click: () => mainWindow.webContents.send('menu-action', 'insert-child') },
+        { label: t.siblingNode + ' (Enter)', click: () => mainWindow.webContents.send('menu-action', 'insert-sibling') },
         { type: 'separator' },
-        { label: t.parentNode, accelerator: 'Shift+Tab', click: () => mainWindow.webContents.send('menu-action', 'insert-parent') },
+        { label: t.parentNode + ' (Shift+Tab)', click: () => mainWindow.webContents.send('menu-action', 'insert-parent') },
         { type: 'separator' },
         { label: t.link, click: () => mainWindow.webContents.send('menu-action', 'insert-link') },
         { label: t.note, click: () => mainWindow.webContents.send('menu-action', 'insert-note') },
@@ -168,65 +173,13 @@ function buildMenu(lang) {
   ];
 }
 
-// 文件操作
-let currentFilePath = null;
+// 文件读写 IPC（P0-4：对话框与路径由渲染进程统一管理，主进程不再持有 currentFilePath）
 
-async function handleOpen() {
-  const t = menuI18n[currentLang] || menuI18n.zh;
-  const result = await dialog.showOpenDialog(mainWindow, {
-    title: t.openFile,
-    filters: [
-      { name: t.mindzFile, extensions: ['mindz'] },
-      { name: t.jsonFile, extensions: ['json'] },
-      { name: t.freemindFile, extensions: ['mm'] },
-      { name: t.allFiles, extensions: ['*'] }
-    ],
-    properties: ['openFile']
-  });
-  if (!result.canceled && result.filePaths.length > 0) {
-    const filePath = result.filePaths[0];
-    try {
-      const content = fs.readFileSync(filePath, 'utf-8');
-      currentFilePath = filePath;
-      mainWindow.webContents.send('file-opened', { content, filePath });
-      mainWindow.setTitle(`MindZ${currentLang === 'zh' ? ' 思维导图' : ' Mind Map'} - ${path.basename(filePath)}`);
-    } catch (err) {
-      dialog.showErrorBox(currentLang === 'zh' ? '打开失败' : 'Open Failed', err.message);
-    }
-  }
-}
-
-async function handleSave() {
-  if (currentFilePath) {
-    mainWindow.webContents.send('menu-action', 'save', currentFilePath);
-  } else {
-    await handleSaveAs();
-  }
-}
-
-async function handleSaveAs() {
-  const t = menuI18n[currentLang] || menuI18n.zh;
-  const result = await dialog.showSaveDialog(mainWindow, {
-    title: t.saveFile,
-    filters: [
-      { name: t.mindzFile, extensions: ['mindz'] },
-      { name: t.jsonFile, extensions: ['json'] },
-      { name: t.freemindFile, extensions: ['mm'] }
-    ],
-    defaultPath: currentFilePath || (currentLang === 'zh' ? '未命名.mindz' : 'Untitled.mindz')
-  });
-  if (!result.canceled) {
-    currentFilePath = result.filePath;
-    mainWindow.webContents.send('menu-action', 'save-as', result.filePath);
-  }
-}
-
-// IPC 通信
 ipcMain.handle('save-file', async (event, { filePath, content }) => {
   try {
     fs.writeFileSync(filePath, content, 'utf-8');
-    currentFilePath = filePath;
-    mainWindow.setTitle(`MindZ 思维导图 - ${path.basename(filePath)}`);
+    // P3: window title follows the current menu language
+    mainWindow.setTitle(`MindZ${currentLang === 'zh' ? ' 思维导图' : ' Mind Map'} - ${path.basename(filePath)}`);
     return { success: true };
   } catch (err) {
     return { success: false, error: err.message };
@@ -282,8 +235,15 @@ ipcMain.handle('export-pdf', async (event, { filePath, svgContent }) => {
 
     await win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
 
-    // Wait for rendering to finish
-    await new Promise(resolve => setTimeout(resolve, 800));
+    // P3: wait for the page to actually finish loading instead of a fixed 800ms guess,
+    // then give the compositor a short settle window before rasterizing to PDF
+    await new Promise((resolve) => {
+      let settled = false;
+      const done = () => { if (!settled) { settled = true; resolve(); } };
+      win.webContents.once('did-finish-load', done);
+      setTimeout(done, 3000); // safety cap in case did-finish-load never fires
+    });
+    await new Promise(resolve => setTimeout(resolve, 150));
 
     const pdfData = await win.webContents.printToPDF({
       printBackground: true,
@@ -353,6 +313,13 @@ ipcMain.handle('ai-chat-stream', async (event, { providerKey, messages, options 
     // Send each chunk to the renderer
     event.sender.send('ai-chat-chunk', chunk);
   }, options || {});
+  return { success: true };
+});
+
+// P0-5: abort the active streaming request (renderer "Stop" button)
+ipcMain.handle('ai-abort-stream', async () => {
+  initAIManager();
+  aiManager.abortActiveStream();
   return { success: true };
 });
 

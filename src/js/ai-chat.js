@@ -150,8 +150,9 @@ class AIChatPanel {
   _bindStreamListener() {
     this.api.onAiChatChunk((chunk) => {
       if (chunk.done) {
-        this._onStreamDone();
+        this._onStreamDone(chunk);
       } else if (chunk.error) {
+        if (this.streamAbort) { this._onStreamDone(chunk); return; } // aborted — treat as clean stop
         this._onStreamError(chunk.error);
       } else if (chunk.text) {
         this._appendStreamText(chunk.text);
@@ -271,12 +272,17 @@ class AIChatPanel {
   }
 
   _stopGeneration() {
+    // P0-5: actually cancel the in-flight request in the main process,
+    // don't just flip a local flag while tokens keep flowing
     this.streamAbort = true;
+    try { this.api?.aiAbortStream?.(); } catch (e) { /* main process may be idle */ }
     this.isStreaming = false;
     this._updateSendButton(false);
   }
 
   _appendStreamText(text) {
+    // P0-5: stop appending once aborted — chunks may still arrive from the socket
+    if (this.streamAbort || !this.isStreaming) return;
     const msgs = document.getElementById('ai-chat-messages');
     if (!msgs) return;
     const lastMsg = msgs.querySelector('.ai-msg-assistant:last-child .ai-msg-content');
@@ -286,36 +292,40 @@ class AIChatPanel {
     }
   }
 
-  _onStreamDone() {
-    if (this.streamAbort) return;
+  _onStreamDone(chunk) {
+    // Always restore UI state; aborted runs skip history/mind-map detection
+    const aborted = this.streamAbort || !!chunk?.aborted;
+    if (!aborted) {
+      // Save the assistant's response to messages array
+      const msgs = document.getElementById('ai-chat-messages');
+      const lastMsg = msgs?.querySelector('.ai-msg-assistant:last-child .ai-msg-content');
+      const content = lastMsg?.textContent || '';
 
-    // Save the assistant's response to messages array
-    const msgs = document.getElementById('ai-chat-messages');
-    const lastMsg = msgs?.querySelector('.ai-msg-assistant:last-child .ai-msg-content');
-    const content = lastMsg?.textContent || '';
+      if (content) {
+        this.messages.push({ role: 'assistant', content });
 
-    if (content) {
-      this.messages.push({ role: 'assistant', content });
-
-      // Check if response contains mind map structure — auto-prompt user
-      const extractedJSON = this._extractMindMapJSON(content);
-      if (extractedJSON) {
-        this._showMindMapPrompt(extractedJSON);
-      } else {
-        // No JSON found — try parsing as Markdown list
-        const mdData = this._parseMarkdownToTree(content);
-        if (mdData && mdData.children && mdData.children.length > 0) {
-          this._showMindMapPrompt(JSON.stringify(mdData));
+        // Check if response contains mind map structure — auto-prompt user
+        const extractedJSON = this._extractMindMapJSON(content);
+        if (extractedJSON) {
+          this._showMindMapPrompt(extractedJSON);
+        } else {
+          // No JSON found — try parsing as Markdown list
+          const mdData = this._parseMarkdownToTree(content);
+          if (mdData && mdData.children && mdData.children.length > 0) {
+            this._showMindMapPrompt(JSON.stringify(mdData));
+          }
         }
       }
     }
 
     this.isStreaming = false;
+    this.streamAbort = false;
     this._updateSendButton(false);
-    this._saveConversation();
+    if (!aborted) this._saveConversation();
   }
 
   _onStreamError(error) {
+    if (this.streamAbort) { this._onStreamDone({}); return; } // aborted — treat as clean stop
     const lastMsg = document.querySelector('#ai-chat-messages .ai-msg-assistant:last-child .ai-msg-content');
     if (lastMsg && !lastMsg.textContent) {
       lastMsg.textContent = '❌ ' + error;
