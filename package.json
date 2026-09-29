@@ -1,6 +1,6 @@
 {
   "name": "mindz",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "MindZ 思维导图 - 类万兴脑图桌面应用",
   "main": "main.js",
   "scripts": {
@@ -39,6 +39,21 @@
       "en-US"
     ],
     "electronDist": "node_modules/electron/dist",
+    "linux": {
+      "target": [
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon_512.png",
+      "artifactName": "mindz_${version}_amd64.${ext}",
+      "category": "Office",
+      "maintainer": "MindZ <mindz@example.com>",
+      "synopsis": "MindZ 思维导图桌面应用"
+    },
     "win": {
       "target": [
         {
