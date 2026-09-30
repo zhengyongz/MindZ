@@ -3,6 +3,11 @@ const path = require('path');
 const fs = require('fs');
 const { AIProviderManager } = require('./src/js/ai-provider');
 
+// 兜底：禁用 GPU 硬件加速，避免 Ubuntu 24.04 + NVIDIA 驱动上
+// Electron 28 GPU 进程初始化不稳定导致应用启动即崩溃退出。
+// 思维导图为 SVG + DOM 渲染，关闭硬件加速对性能无感知影响。
+app.disableHardwareAcceleration();
+
 let mainWindow = null;
 let aiManager = null;
 let currentLang = 'zh';
