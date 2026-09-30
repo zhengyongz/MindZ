@@ -52,7 +52,10 @@
       "artifactName": "mindz_${version}_amd64.${ext}",
       "category": "Office",
       "maintainer": "MindZ <mindz@example.com>",
-      "synopsis": "MindZ 思维导图桌面应用"
+      "synopsis": "MindZ 思维导图桌面应用",
+      "desktop": {
+        "StartupWMClass": "mindz"
+      }
     },
     "win": {
       "target": [
