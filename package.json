@@ -119,7 +119,13 @@
     "asar": true,
     "asarUnpack": [
       "assets/**/*"
-    ]
+    ],
+    "deb": {
+      "fpm": [
+        "--after-install",
+        "build/after-install.sh"
+      ]
+    }
   },
   "allowScripts": {
     "electron@28.3.3": true
